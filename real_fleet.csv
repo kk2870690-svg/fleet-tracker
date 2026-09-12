@@ -1,0 +1,7 @@
+registration_number,vehicle_type,make,model,registration_year,tax_expiry_date,insurance_expiry_date,pucc_expiry_date,permit_expiry_date,fitness_expiry_date
+UP85DT5535,Sedan,Maruti,Dzire,2023,2026-02-28,2027-06-04,2027-06-15,2028-07-02,2027-06-05
+UP85DT3277,Sedan,Maruti,Dzire,2023,2026-02-28,2027-03-22,2027-04-30,2028-04-02,2027-04-03
+UP85ET9619,Sedan,Maruti,Dzire,2025,2026-02-28,2026-12-30,2026-12-30,2030-01-09,2026-12-31
+UP85ET9621,Sedan,Maruti,Dzire,2025,2030-01-09,2026-12-30,2026-12-30,2030-01-09,2026-12-31
+UP85ET9622,Sedan,Maruti,Dzire,2025,2026-02-28,2026-12-30,2026-09-27,2030-01-09,2026-12-31
+UP85ET9623,Sedan,Maruti,Dzire,2025,2025-11-30,2026-12-30,2026-10-17,2030-01-09,2026-12-31

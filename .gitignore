@@ -1,0 +1,7 @@
+cat << 'EOF' > .gitignore
+.env
+__pycache__/
+*.pyc
+venv/
+.venv/
+EOF

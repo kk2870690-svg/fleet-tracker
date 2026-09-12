@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FleetPulse Compliance Tracker</title>
+  
+  <!-- Mobile App Settings -->
+  <meta name="theme-color" content="#020617" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    @keyframes pulse-red {
+      0%, 100% {
+        background-color: rgba(239, 68, 68, 0.15);
+        border-color: rgba(239, 68, 68, 0.9);
+        box-shadow: 0 0 12px rgba(239, 68, 68, 0.4);
+      }
+      50% {
+        background-color: rgba(239, 68, 68, 0.35);
+        border-color: rgba(239, 68, 68, 1);
+        box-shadow: 0 0 20px rgba(239, 68, 68, 0.7);
+      }
+    }
+    @keyframes pulse-yellow {
+      0%, 100% {
+        background-color: rgba(245, 158, 11, 0.12);
+        border-color: rgba(245, 158, 11, 0.8);
+        box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+      }
+      50% {
+        background-color: rgba(245, 158, 11, 0.28);
+        border-color: rgba(245, 158, 11, 1);
+        box-shadow: 0 0 18px rgba(245, 158, 11, 0.6);
+      }
+    }
+    .blink-red { animation: pulse-red 1.3s infinite ease-in-out; }
+    .blink-yellow { animation: pulse-yellow 1.5s infinite ease-in-out; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased p-4 md:p-8">
+
+  <!-- 1. LOGIN SCREEN -->
+  <div id="login-section" class="min-h-[80vh] flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 p-8 rounded-2xl w-full max-w-md shadow-2xl space-y-6">
+      <div class="text-center space-y-2">
+        <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-600/20 text-indigo-400 mb-2 text-2xl">
+          🚗
+           </div>
+        <h2 class="text-2xl font-bold text-white tracking-tight">FleetPulse Login</h2>
+        <p class="text-xs text-slate-400">Authorized personnel only (Family &amp; Managers)</p>
+      </div>
+
+       
+      <form onsubmit="handleLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Email Address</label>
+          <input type="email" id="login-email" required placeholder="admin@fleetpulse.com" class="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Password</label>
+          <input type="password" id="login-password" required placeholder="••••••••" class="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none" />
+        </div>
+
+        <div id="login-error" class="hidden text-xs text-red-400 bg-red-950/60 border border-red-800 p-2.5 rounded-lg"></div>
+
+        <button type="submit" id="login-btn" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg text-sm transition shadow-lg shadow-indigo-600/20">
+          Sign In to Fleet
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. DASHBOARD -->
+  <div id="app-section" class="hidden max-w-7xl mx-auto space-y-6">
+    <!-- Header -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-slate-800 gap-4">
+      <div>
+        <div class="flex items-center gap-3">
+          <span class="inline-block w-3 h-3 bg-emerald-500 rounded-full animate-ping"></span>
+          <h1 class="text-2xl md:text-3xl font-bold tracking-tight text-white">FleetPulse Live</h1>
+        </div>
+        <p id="user-display" class="text-xs text-slate-400 mt-1">Logged in as: ...</p>
+      </div>
+
+      <div class="flex items-center gap-3 flex-wrap">
+        <button onclick="openAddModal()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-semibold transition shadow-lg shadow-emerald-600/20 flex items-center gap-1.5">
+          <span>+</span> Add Vehicle
+        </button>
+        <button onclick="fetchFleet()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-sm font-medium transition flex items-center gap-2">
+          <span>↻</span> Refresh
+        </button>
+        <button onclick="handleSignOut()" class="px-3 py-2 bg-red-950/40 hover:bg-red-900/60 border border-red-900/60 rounded-lg text-xs font-semibold text-red-300 transition">
+          Sign Out
+        </button>
+      </div>
+    </header>
+
+    <!-- Stats Summary -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <p class="text-xs uppercase font-medium text-slate-400">Total Fleet</p>
+        <p id="stat-total" class="text-2xl font-bold text-white mt-1">0</p>
+      </div>
+      <div class="bg-red-950/40 border border-red-900/60 rounded-xl p-4">
+        <p class="text-xs uppercase font-medium text-red-400">Expired Docs (Grounded)</p>
+        <p id="stat-expired" class="text-2xl font-bold text-red-400 mt-1">0</p>
+      </div>
+      <div class="bg-amber-950/40 border border-amber-900/60 rounded-xl p-4">
+        <p class="text-xs uppercase font-medium text-amber-400">Due in 30 Days</p>
+        <p id="stat-warning" class="text-2xl font-bold text-amber-400 mt-1">0</p>
+      </div>
+      <div class="bg-emerald-950/40 border border-emerald-900/60 rounded-xl p-4">
+        <p class="text-xs uppercase font-medium text-emerald-400">Fully Compliant</p>
+        <p id="stat-valid" class="text-2xl font-bold text-emerald-400 mt-1">0</p>
+      </div>
+    </div>
+
+    <!-- Filters & Search -->
+    <div class="flex flex-col sm:flex-row gap-3 items-center justify-between">
+      <div class="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1">
+        <button onclick="setFilter('all')" id="tab-all" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white">All Cabs</button>
+        <button onclick="setFilter('critical')" id="tab-critical" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700">Expired Only</button>
+        <button onclick="setFilter('warning')" id="tab-warning" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700">Due Soon (&le;30d)</button>
+      </div>
+      <input type="text" id="search-input" oninput="applyFilters()" placeholder="Search registration number, make, or model..." class="w-full sm:w-72 px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500" />
+    </div>
+
+    <!-- Vehicles Grid -->
+    <div id="fleet-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div class="col-span-full py-12 text-center text-slate-500">Loading fleet records...</div>
+    </div>
+  </div>
+
+  <!-- Quick Renew Modal -->
+  <div id="renew-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center pb-3 border-b border-slate-800">
+        <div>
+          <h3 class="text-lg font-bold text-white">Quick Renew Document</h3>
+          <p id="renew-subtitle" class="text-xs text-indigo-400 font-mono mt-0.5">UP85-XX-0000 &bull; Road Tax</p>
+        </div>
+        <button onclick="closeRenewModal()" class="text-slate-400 hover:text-white text-xl font-bold">&times;</button>
+      </div>
+
+      <div class="space-y-4 text-sm">
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-2">Quick Presets (from today):</label>
+          <div class="grid grid-cols-4 gap-2">
+            <button onclick="applyPreset(1, 'months')" class="px-2 py-2 bg-slate-800 hover:bg-indigo-600 rounded-lg text-xs font-semibold text-slate-200 hover:text-white transition">+1 Month</button>
+            <button onclick="applyPreset(3, 'months')" class="px-2 py-2 bg-slate-800 hover:bg-indigo-600 rounded-lg text-xs font-semibold text-slate-200 hover:text-white transition">+3 Months</button>
+            <button onclick="applyPreset(6, 'months')" class="px-2 py-2 bg-slate-800 hover:bg-indigo-600 rounded-lg text-xs font-semibold text-slate-200 hover:text-white transition">+6 Months</button>
+            <button onclick="applyPreset(1, 'years')" class="px-2 py-2 bg-slate-800 hover:bg-indigo-600 rounded-lg text-xs font-semibold text-slate-200 hover:text-white transition">+1 Year</button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Or Pick Exact Expiry Date:</label>
+          <input type="date" id="renew-custom-date" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-indigo-500 focus:outline-none" />
+        </div>
+
+        <div class="flex justify-end gap-3 pt-3 border-t border-slate-800">
+          <button type="button" onclick="closeRenewModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg font-medium text-slate-300">Cancel</button>
+          <button type="button" onclick="confirmRenew()" id="renew-save-btn" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg font-semibold text-white">Update Expiry</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Vehicle Modal -->
+  <div id="add-modal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center pb-3 border-b border-slate-800">
+        <h3 class="text-lg font-bold text-white">Register New Vehicle</h3>
+        <button onclick="closeAddModal()" class="text-slate-400 hover:text-white text-xl font-bold">&times;</button>
+      </div>
+
+      <form id="vehicle-form" onsubmit="handleFormSubmit(event)" class="space-y-4 text-sm">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Registration Number *</label>
+            <input type="text" id="f_reg" required placeholder="UP85-AB-1234" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg uppercase text-white focus:border-indigo-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Vehicle Type *</label>
+            <select id="f_type" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-indigo-500 focus:outline-none">
+              <option value="Sedan">Sedan (Dzire, Aura)</option>
+              <option value="7-Seater">7-Seater (Ertiga, Innova)</option>
+              <option value="Hatchback">Hatchback (WagonR)</option>
+              <option value="SUV">SUV</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Make *</label>
+            <input type="text" id="f_make" required placeholder="Maruti" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-indigo-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Model *</label>
+            <input type="text" id="f_model" required placeholder="Dzire" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-indigo-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Reg Year *</label>
+            <input type="number" id="f_year" required min="2005" max="2027" value="2023" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-indigo-500 focus:outline-none" />
+          </div>
+        </div>
+
+        <div class="border-t border-slate-800 pt-3 space-y-3">
+          <p class="text-xs font-semibold text-indigo-400 uppercase tracking-wider">Compliance Expiry Dates</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Insurance Expiry *</label>
+              <input type="date" id="f_ins" required class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-indigo-500 focus:outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">PUCC Expiry *</label>
+              <input type="date" id="f_puc" required class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-indigo-500 focus:outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Road Tax Expiry *</label>
+              <input type="date" id="f_tax" required class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-indigo-500 focus:outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Permit Expiry *</label>
+              <input type="date" id="f_permit" required class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-indigo-500 focus:outline-none" />
+            </div>
+            <div class="col-span-2">
+              <label class="block text-xs font-medium text-slate-400 mb-1">Fitness Expiry</label>
+              <input type="date" id="f_fit" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-indigo-500 focus:outline-none" />
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-3 pt-3 border-t border-slate-800">
+          <button type="button" onclick="closeAddModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg font-medium text-slate-300">Cancel</button>
+          <button type="submit" id="save-btn" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg font-semibold text-white">Save Vehicle</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://czzcfxnswocjpedolbhe.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6emNmeG5zd29janBlZG9sYmhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyMDg4NjAsImV4cCI6MjEwNDc4NDg2MH0.gJOuWaeqvIbkeZ2zPJjpBZWJgYqLA-_RZKvi9EFsVps";
+    const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let rawFleet = [];
+    let currentFilter = 'all';
+
+    let activeRenew = {
+      vehicleId: null,
+      regNumber: '',
+      docField: '',
+      docTitle: ''
+    };
+
+    // --- AUTH LOGIC ---
+    async function checkUserSession() {
+      const { data: { session } } = await client.auth.getSession();
+      toggleView(session);
+
+      client.auth.onAuthStateChange((_event, session) => {
+        toggleView(session);
+      });
+    }
+
+    function toggleView(session) {
+      const loginSec = document.getElementById('login-section');
+      const appSec = document.getElementById('app-section');
+
+      if (session) {
+        loginSec.classList.add('hidden');
+        appSec.classList.remove('hidden');
+        document.getElementById('user-display').innerText = `Logged in as: ${session.user.email}`;
+        fetchFleet();
+      } else {
+        loginSec.classList.remove('hidden');
+        appSec.classList.add('hidden');
+      }
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+      const btn = document.getElementById('login-btn');
+      const errBox = document.getElementById('login-error');
+
+      errBox.classList.add('hidden');
+      btn.innerText = "Authenticating...";
+      btn.disabled = true;
+
+      const { data, error } = await client.auth.signInWithPassword({ email, password });
+
+      btn.innerText = "Sign In to Fleet";
+      btn.disabled = false;
+
+      if (error) {
+        errBox.innerText = error.message;
+        errBox.classList.remove('hidden');
+      }
+    }
+
+    async function handleSignOut() {
+      await client.auth.signOut();
+    }
+
+    // --- FLEET DATA & RENDERING ---
+    function getDaysDiff(dateStr) {
+      if (!dateStr) return 9999;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const target = new Date(dateStr);
+      target.setHours(0, 0, 0, 0);
+      return Math.round((target - today) / (1000 * 60 * 60 * 24));
+    }
+
+    function getCarMinDays(car) {
+      const dates = [
+        car.tax_expiry_date ? getDaysDiff(car.tax_expiry_date) : 9999,
+        car.insurance_expiry_date ? getDaysDiff(car.insurance_expiry_date) : 9999,
+        car.pucc_expiry_date ? getDaysDiff(car.pucc_expiry_date) : 9999,
+        car.permit_expiry_date ? getDaysDiff(car.permit_expiry_date) : 9999,
+        car.fitness_expiry_date ? getDaysDiff(car.fitness_expiry_date) : 9999
+      ];
+      return Math.min(...dates);
+    }
+
+    function renderDocPill(title, dateStr, carId, regNumber, docField) {
+      const days = getDaysDiff(dateStr);
+      let badgeHtml = '';
+      let styleClass = '';
+
+      if (days < 0) {
+        styleClass = 'blink-red border border-red-500 text-red-300';
+        badgeHtml = `<span class="text-[11px] font-black uppercase bg-red-600/60 px-2 py-0.5 rounded text-white">Expired (${Math.abs(days)}d ago)</span>`;
+      } else if (days <= 30) {
+        styleClass = 'blink-yellow border border-amber-500 text-amber-200';
+        badgeHtml = `<span class="text-[11px] font-black uppercase bg-amber-600/50 px-2 py-0.5 rounded text-amber-100">${days}d left</span>`;
+      } else {
+        styleClass = 'bg-slate-900/60 border border-slate-800 text-slate-300';
+        badgeHtml = `<span class="text-[11px] font-medium text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded">Valid (${days}d)</span>`;
+      }
+
+      return `
+        <div class="${styleClass} p-2.5 rounded-lg flex justify-between items-center transition">
+          <div>
+            <p class="text-[10px] uppercase font-bold opacity-80 tracking-wider">${title}</p>
+            <p class="text-xs font-mono font-medium">${dateStr}</p>
+          </div>
+          <div class="flex items-center gap-2">
+            ${badgeHtml}
+            <button onclick="openRenewModal('${carId}', '${regNumber}', '${docField}', '${title}', '${dateStr}')" class="px-2 py-1 bg-slate-800/90 hover:bg-indigo-600 text-[11px] font-semibold text-slate-200 hover:text-white rounded transition border border-slate-700">
+              Renew
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    async function fetchFleet() {
+      const container = document.getElementById('fleet-container');
+      const { data, error } = await client.from('vehicles').select('*').order('created_at', { ascending: false });
+
+      if (error) {
+        container.innerHTML = `<div class="col-span-full p-4 bg-red-950/80 border border-red-800 rounded-lg text-red-300">
+          Database Error: ${error.message}
+        </div>`;
+        return;
+      }
+
+      rawFleet = data || [];
+      updateDashboard();
+    }
+
+    function updateDashboard() {
+      let expiredTotal = 0;
+      let warningTotal = 0;
+      let compliantTotal = 0;
+
+      rawFleet.forEach(car => {
+        const minDays = getCarMinDays(car);
+
+        if (minDays < 0) expiredTotal++;
+        else if (minDays <= 30) warningTotal++;
+        else compliantTotal++;
+      });
+
+      document.getElementById('stat-total').innerText = rawFleet.length;
+      document.getElementById('stat-expired').innerText = expiredTotal;
+      document.getElementById('stat-warning').innerText = warningTotal;
+      document.getElementById('stat-valid').innerText = compliantTotal;
+
+      applyFilters();
+    }
+
+    function applyFilters() {
+      const container = document.getElementById('fleet-container');
+      const term = document.getElementById('search-input').value.toLowerCase();
+
+      const filtered = rawFleet.filter(car => {
+        const matchesSearch = car.registration_number.toLowerCase().includes(term) ||
+                              car.model.toLowerCase().includes(term) ||
+                              car.make.toLowerCase().includes(term);
+        if (!matchesSearch) return false;
+
+        const minDays = getCarMinDays(car);
+
+        if (currentFilter === 'critical') return minDays < 0;
+        if (currentFilter === 'warning') return minDays >= 0 && minDays <= 30;
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="col-span-full py-16 text-center text-slate-500 bg-slate-900/30 rounded-xl border border-dashed border-slate-800">
+          No vehicles found matching your criteria.
+        </div>`;
+        return;
+      }
+
+      const currentYear = new Date().getFullYear();
+
+      container.innerHTML = filtered.map(car => {
+        const age = currentYear - car.registration_year;
+        const minDays = getCarMinDays(car);
+
+        let borderState = "border-slate-800";
+        if (minDays < 0) borderState = "border-red-900 bg-red-950/10";
+        else if (minDays <= 30) borderState = "border-amber-900/80 bg-amber-950/10";
+
+        return `
+          <div class="bg-slate-900/80 border ${borderState} rounded-xl p-5 shadow-lg flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-start mb-3">
+                <div>
+                  <span class="inline-block px-2.5 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-indigo-950 text-indigo-300 border border-indigo-800 mb-1">
+                    ${car.registration_number}
+                  </span>
+                  <h3 class="text-base font-bold text-white">${car.make} ${car.model}</h3>
+                </div>
+                <div class="text-right">
+                  <span class="text-xs font-medium text-slate-400 block">${car.vehicle_type}</span>
+                  <span class="text-[11px] text-slate-500">${age > 0 ? `${age}y old` : 'New'} (${car.registration_year})</span>
+                </div>
+              </div>
+
+              <div class="space-y-2 mt-4">
+                ${renderDocPill('Insurance Policy', car.insurance_expiry_date, car.id, car.registration_number, 'insurance_expiry_date')}
+                ${renderDocPill('PUCC Certificate', car.pucc_expiry_date, car.id, car.registration_number, 'pucc_expiry_date')}
+                ${renderDocPill('Road Tax', car.tax_expiry_date, car.id, car.registration_number, 'tax_expiry_date')}
+                ${renderDocPill('Commercial Permit', car.permit_expiry_date, car.id, car.registration_number, 'permit_expiry_date')}
+                ${car.fitness_expiry_date ? renderDocPill('Fitness Certificate', car.fitness_expiry_date, car.id, car.registration_number, 'fitness_expiry_date') : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function setFilter(filter) {
+      currentFilter = filter;
+      ['all', 'critical', 'warning'].forEach(tab => {
+        const el = document.getElementById(`tab-${tab}`);
+        if (tab === filter) {
+          el.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow";
+        } else {
+          el.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700";
+        }
+      });
+      applyFilters();
+    }
+
+    // Quick Renew Modal Controls
+    function openRenewModal(carId, regNumber, docField, docTitle, currentDateStr) {
+      activeRenew = { vehicleId: carId, regNumber, docField, docTitle };
+      document.getElementById('renew-subtitle').innerText = `${regNumber} • ${docTitle}`;
+      document.getElementById('renew-custom-date').value = currentDateStr;
+      document.getElementById('renew-modal').classList.remove('hidden');
+    }
+
+    function closeRenewModal() {
+      document.getElementById('renew-modal').classList.add('hidden');
+    }
+
+    function applyPreset(amount, unit) {
+      const base = new Date();
+      if (unit === 'months') {
+        base.setMonth(base.getMonth() + amount);
+      } else if (unit === 'years') {
+        base.setFullYear(base.getFullYear() + amount);
+      }
+      const yyyy = base.getFullYear();
+      const mm = String(base.getMonth() + 1).padStart(2, '0');
+      const dd = String(base.getDate()).padStart(2, '0');
+      document.getElementById('renew-custom-date').value = `${yyyy}-${mm}-${dd}`;
+    }
+
+    async function confirmRenew() {
+      const newDate = document.getElementById('renew-custom-date').value;
+      if (!newDate) {
+        alert("Please pick a valid expiry date.");
+        return;
+      }
+
+      const btn = document.getElementById('renew-save-btn');
+      btn.innerText = "Updating...";
+      btn.disabled = true;
+
+      const updatePayload = {};
+      updatePayload[activeRenew.docField] = newDate;
+
+      const { error } = await client
+        .from('vehicles')
+        .update(updatePayload)
+        .eq('id', activeRenew.vehicleId);
+
+      btn.innerText = "Update Expiry";
+      btn.disabled = false;
+
+      if (error) {
+        alert("Failed to update: " + error.message);
+      } else {
+        closeRenewModal();
+        fetchFleet();
+      }
+    }
+
+    // Add Vehicle Modal Controls
+    function openAddModal() {
+      document.getElementById('add-modal').classList.remove('hidden');
+    }
+    function closeAddModal() {
+      document.getElementById('add-modal').classList.add('hidden');
+      document.getElementById('vehicle-form').reset();
+    }
+
+    async function handleFormSubmit(e) {
+      e.preventDefault();
+      const saveBtn = document.getElementById('save-btn');
+      saveBtn.innerText = "Saving...";
+      saveBtn.disabled = true;
+
+      const newVehicle = {
+        registration_number: document.getElementById('f_reg').value.trim().toUpperCase(),
+        vehicle_type: document.getElementById('f_type').value,
+        make: document.getElementById('f_make').value.trim(),
+        model: document.getElementById('f_model').value.trim(),
+        registration_year: parseInt(document.getElementById('f_year').value),
+        insurance_expiry_date: document.getElementById('f_ins').value,
+        pucc_expiry_date: document.getElementById('f_puc').value,
+        tax_expiry_date: document.getElementById('f_tax').value,
+        permit_expiry_date: document.getElementById('f_permit').value,
+        fitness_expiry_date: document.getElementById('f_fit').value || null
+      };
+
+      const { error } = await client.from('vehicles').upsert([newVehicle], { onConflict: 'registration_number' });
+
+      saveBtn.innerText = "Save Vehicle";
+      saveBtn.disabled = false;
+
+      if (error) {
+        alert("Error saving vehicle: " + error.message);
+      } else {
+        closeAddModal();
+        fetchFleet();
+      }
+    }
+
+// Bypass login completely
+document.getElementById('login-section').classList.add('hidden');
+document.getElementById('app-section').classList.remove('hidden');
+fetchFleet();
+  </script>
+</body>
+</html>
